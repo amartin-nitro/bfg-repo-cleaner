@@ -1,6 +1,7 @@
 package com.madgag.git.bfg.cleaner
 
 import com.google.common.io.ByteStreams
+import org.eclipse.jgit.lib.ObjectId
 import com.madgag.git.bfg.model.TreeBlobEntry
 import com.madgag.git.ThreadLocalObjectDatabaseResources
 import java.util.{Arrays => JavaArrays}
@@ -19,6 +20,8 @@ trait BlobExecModifier extends TreeBlobModifier {
   def command: String
 
   def fileMask: String
+
+  def blobIds: Set[ObjectId]
 
   val threadLocalObjectDBResources: ThreadLocalObjectDatabaseResources
 
@@ -73,17 +76,22 @@ trait BlobExecModifier extends TreeBlobModifier {
 
 
   def fix(entry: TreeBlobEntry) = {
+    if (fileMask eq null) {
+      val blobId = entry.objectId
 
-
-    val fileName = entry.filename.toString
-
-    val toProcess = fileMask.r
-
-
-    toProcess.findFirstIn(fileName) match {
-      case Some(_) => execute(entry)
-      case _ => entry.withoutName
-
+      blobIds.contains(blobId) match {
+        case true => execute(entry)
+        case false => entry.withoutName
+      }
+    }
+    else {
+      val fileName = entry.filename.toString
+      val toProcess = fileMask.r
+      
+      toProcess.findFirstIn(fileName) match {
+        case Some(_) => execute(entry)
+        case _ => entry.withoutName
+      }
     }
   }
 }

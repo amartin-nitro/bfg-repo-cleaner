@@ -99,6 +99,10 @@ object CLIConfig {
       (v, c) => c.copy(blobExec = Some(v))
     }
 
+    opt[(String, File)]("blob-exec-ids").text("Set of blob to execute the system command upon ").action {
+      (v, c) => c.copy(blobIds = Some(v))
+    }
+
     opt[String]('p', "protect-blobs-from").valueName("<refs>").text("protect blobs that appear in the most recent versions of the specified refs (default is 'HEAD')").action {
       (v, c) => c.copy(protectBlobsFromRevisions = v.split(',').toSet)
     }
@@ -140,6 +144,7 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
                      filterSizeThreshold: Int = BlobTextModifier.DefaultSizeThreshold,
                      textReplacementExpressions: Traversable[String] = List.empty,
                      blobExec: Option[(String, String)] = None,
+                     blobIds: Option[(String, File)] = None,
                      stripBlobsWithIds: Option[Set[ObjectId]] = None,
                      lfsConversion: Option[String] = None,
                      strictObjectChecking: Boolean = false,
@@ -206,8 +211,31 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
           System.exit(1)
         }
 
+        val blobIds = null
 
         println(s"command ${command} mask ${fileMask}")
+        val threadLocalObjectDBResources: ThreadLocalObjectDatabaseResources = repo.getObjectDatabase.threadLocalResources
+      }
+  }
+
+  val blobIdsExecModifier: Option[BlobExecModifier] = blobIds.map {
+    execCommand =>
+      new BlobExecModifier {
+        val command = execCommand._1
+
+        if (execCommand._2 eq "") {
+          println(s"Error : Provide a file list of things");
+        }
+
+        var fileMask = null
+        var blobIds = execCommand._2.lines().map(_.trim).filterNot(_.isEmpty).map(_.asObjectId).toSet
+
+        if (!Files.exists(Paths.get(command))) {
+          println(s"\nError: command  ${command} does not exist (blob-exec option)")
+          System.exit(1)
+        }
+
+        println(s"command ${command} blobs-file ${execCommand._2}")
         val threadLocalObjectDBResources: ThreadLocalObjectDatabaseResources = repo.getObjectDatabase.threadLocalResources
       }
   }
@@ -249,7 +277,7 @@ case class CLIConfig(stripBiggestBlobs: Option[Int] = None,
       }
     }
 
-    Seq(blobsByIdRemover, blobRemover, fileDeletion, blobTextModifier, lfsBlobConverter, blobExecModifier).flatten
+    Seq(blobsByIdRemover, blobRemover, fileDeletion, blobTextModifier, lfsBlobConverter, blobExecModifier, blobIdsExecModifier).flatten
   }
 
   lazy val definesNoWork = treeBlobCleaners.isEmpty && folderDeletion.isEmpty && treeEntryListCleaners.isEmpty
